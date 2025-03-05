@@ -55,8 +55,9 @@ def parse_count(count_result):
     return max(count,0)
 class JobSearchRetriever:
     def __init__(self, geo_id='103644278', keyword='prompt engineer'):
+        # Keep the original link structure, just replace the hardcoded keyword
         self.filter_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE,keywords:%22{keyword}%22,locationUnion:(geoId:{geo_id}),spellCorrectionEnabled:true)"
-        self.job_search_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-216&count={{count}}&q=jobSearch&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:%22{keyword}%22,locationUnion:(geoId:{geo_id}),spellCorrectionEnabled:true)&start=0"
+        self.job_search_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-216&count={count}&q=jobSearch&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:%22{keyword}%22,locationUnion:(geoId:{geo_id}),spellCorrectionEnabled:true)&start=0"
         
         self.geo_id = geo_id
         self.keyword = keyword
@@ -65,6 +66,7 @@ class JobSearchRetriever:
         self.sessions = [create_session(email, password) for email, password in zip(emails, passwords)]
         self.session_index = 0
         
+        # Preserve the original headers
         self.headers = [{
             'Authority': 'www.linkedin.com',
             'Method': 'GET',
@@ -88,7 +90,7 @@ class JobSearchRetriever:
         count_result = self.sessions[self.session_index].get(filter_link, headers=self.headers[self.session_index])
         count = parse_count(count_result)
         
-        job_search_link = self.job_search_link.format(count=count, keyword=encoded_keyword, geo_id=self.geo_id)
+        job_search_link = self.job_search_link.format(count = count, keyword = encoded_keyword, geo_id = self.geo_id)
         results = self.sessions[self.session_index].get(job_search_link, headers=self.headers[self.session_index])
 
         self.session_index = (self.session_index + 1) % len(self.sessions)
@@ -112,6 +114,7 @@ class JobSearchRetriever:
                         break
 
         return job_ids
+
 
 class JobDetailRetriever:
     def __init__(self):
