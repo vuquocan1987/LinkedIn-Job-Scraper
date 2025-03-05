@@ -54,39 +54,41 @@ def parse_count(count_result):
             break
     return max(count,0)
 class JobSearchRetriever:
-    def __init__(self,geo_id='103644278'):
-        # self.job_search_link = 'https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=100&q=jobSearch&query=(origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0'
-        # self.job_search_link = 'https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=100&q=jobSearch&query=(keywords:Data%20Engineer,origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0'
-        # self.job_search_link = 'https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_SEARCH_BUTTON,keywords:%22prompt%20engineer%22,locationUnion:(geoId:103644278),spellCorrectionEnabled:true)'
-        self.filter_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE,keywords:%22prompt%20engineer%22,locationUnion:(geoId:{geo_id}),spellCorrectionEnabled:true)"
-        self.job_search_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-216&count={}&q=jobSearch&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:%22prompt%20engineer%22,locationUnion:(geoId:{}),spellCorrectionEnabled:true)&start=0"
+    def __init__(self, geo_id='103644278', keyword='prompt engineer'):
+        self.filter_link = f"https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE,keywords:%22{{keyword}}%22,locationUnion:(geoId:{{geo_id}}),spellCorrectionEnabled:true)"
+        self.job_search_link = f"https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-216&count={{count}}&q=jobSearch&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:%22{{keyword}}%22,locationUnion:(geoId:{{geo_id}}),spellCorrectionEnabled:true)&start=0"
+        
         self.geo_id = geo_id
+        self.keyword = keyword
+        
         emails, passwords = get_logins('search')
         self.sessions = [create_session(email, password) for email, password in zip(emails, passwords)]
         self.session_index = 0
+        
         self.headers = [{
             'Authority': 'www.linkedin.com',
             'Method': 'GET',
-            # 'Path': 'voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=25&q=jobSearch&query=(origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0',
             'Scheme': 'https',
             'Accept': 'application/vnd.linkedin.normalized+json+2.1',
             'Accept-Encoding': 'gzip, deflate, br',
             'Accept-Language': 'en-US,en;q=0.9',
             'Cookie': "; ".join([f"{key}={value}" for key, value in session.cookies.items()]),
             'Csrf-Token': session.cookies.get('JSESSIONID').strip('"'),
-            # 'TE': 'Trailers',
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36',
-            # 'X-Li-Track': '{"clientVersion":"1.12.7990","mpVersion":"1.12.7990","osName":"web","timezoneOffset":-7,"timezone":"America/Los_Angeles","deviceFormFactor":"DESKTOP","mpName":"voyager-web","displayDensity":1,"displayWidth":1920,"displayHeight":1080}'
             'X-Li-Track': '{"clientVersion":"1.13.5589","mpVersion":"1.13.5589","osName":"web","timezoneOffset":-7,"timezone":"America/Los_Angeles","deviceFormFactor":"DESKTOP","mpName":"voyager-web","displayDensity":1,"displayWidth":360,"displayHeight":800}'
         } for session in self.sessions]
 
     def get_jobs(self):
         job_ids = {}
-        count_result = self.sessions[self.session_index].get(self.filter_link.format(geo_id=self.geo_id), headers=self.headers[self.session_index])
-        count = parse_count(count_result)
-        # this code is a techdebted mess but it works (for now) the problem is i am using index 0 to get the count which is not guaranteed to be the same
+        # URL encode the keyword
+        encoded_keyword = urllib.parse.quote(self.keyword)
         
-        job_search_link = self.job_search_link.format(count, self.geo_id)
+        # Update links with current keyword
+        filter_link = self.filter_link.format(keyword=encoded_keyword, geo_id=self.geo_id)
+        count_result = self.sessions[self.session_index].get(filter_link, headers=self.headers[self.session_index])
+        count = parse_count(count_result)
+        
+        job_search_link = self.job_search_link.format(count=count, keyword=encoded_keyword, geo_id=self.geo_id)
         results = self.sessions[self.session_index].get(job_search_link, headers=self.headers[self.session_index])
 
         self.session_index = (self.session_index + 1) % len(self.sessions)
@@ -99,8 +101,11 @@ class JobSearchRetriever:
         for r in results['included']:
             if r['$type'] == 'com.linkedin.voyager.dash.jobs.JobPostingCard' and 'referenceId' in r:
                 job_id = int(strip_val(r['jobPostingUrn'], 1))
-                job_ids[job_id] = {'sponsored': False}
-                job_ids[job_id]['title'] = r.get('jobPostingTitle')
+                job_ids[job_id] = {
+                    'sponsored': False,
+                    'title': r.get('jobPostingTitle'),
+                    'search_keyword': self.keyword  # Add the search keyword
+                }
                 for x in r['footerItems']:
                     if x.get('type') == 'PROMOTED':
                         job_ids[job_id]['sponsored'] = True
