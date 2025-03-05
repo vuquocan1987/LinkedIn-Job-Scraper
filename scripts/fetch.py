@@ -55,8 +55,8 @@ def parse_count(count_result):
     return max(count,0)
 class JobSearchRetriever:
     def __init__(self, geo_id='103644278', keyword='prompt engineer'):
-        self.filter_link = f"https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE,keywords:%22{{keyword}}%22,locationUnion:(geoId:{{geo_id}}),spellCorrectionEnabled:true)"
-        self.job_search_link = f"https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-216&count={{count}}&q=jobSearch&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:%22{{keyword}}%22,locationUnion:(geoId:{{geo_id}}),spellCorrectionEnabled:true)&start=0"
+        self.filter_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE,keywords:%22{keyword}%22,locationUnion:(geoId:{geo_id}),spellCorrectionEnabled:true)"
+        self.job_search_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-216&count={{count}}&q=jobSearch&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:%22{keyword}%22,locationUnion:(geoId:{geo_id}),spellCorrectionEnabled:true)&start=0"
         
         self.geo_id = geo_id
         self.keyword = keyword
