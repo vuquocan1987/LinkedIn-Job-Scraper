@@ -37,6 +37,8 @@ It's important to note that while ```search_retriever.py``` typically runs smoot
 
 ```python to_csv.py --folder <destination folder> --database <linkedin_jobs.db>```
 
+<!--python to_csv.py --folder results/ --database linkedin_jobs.db  -->
+
 Creates a CSV file for each database, along with minimal preprocessing
 
 

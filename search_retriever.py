@@ -6,6 +6,12 @@ import time
 from collections import deque
 import pandas as pd
 
+GEO_ID = {
+    'EMEA': 91000007, # Europe, Middle East, Africa
+    'APAC': 91000003, # Asia Pacific
+    'LATAM': 91000008, # Latin America
+    'NAMER': 91000022, # North America
+}
 
 sleep_times = deque(maxlen=5)
 first = True
@@ -20,18 +26,20 @@ create_tables(conn, cursor)
 job_searcher = JobSearchRetriever()
 
 while True:
-    all_results = job_searcher.get_jobs()
+    for geo, geo_id in GEO_ID.items():
+        job_searcher.geo_id = geo_id
+        all_results = job_searcher.get_jobs()
 
-    query = "SELECT job_id FROM jobs WHERE job_id IN ({})".format(','.join(['?'] * len(all_results)))
-    cursor.execute(query, list(all_results.keys()))
-    result = cursor.fetchall()
-    result = [r[0] for r in result]
-    new_results = {job_id: job_info for job_id, job_info in all_results.items() if job_id not in result}
-    insert_job_postings(new_results, conn, cursor)
-    total_non_sponsored = len([x for x in all_results.values() if x['sponsored'] is False])
-    new_non_sponsored = len([x for x in new_results.values() if x['sponsored'] is False])
-    print('{}/{} NEW RESULTS | {}/{} NEW NON-PROMOTED RESULTS'.format(
-        len(new_results), len(all_results), new_non_sponsored, total_non_sponsored))
+        query = "SELECT job_id FROM jobs WHERE job_id IN ({})".format(','.join(['?'] * len(all_results)))
+        cursor.execute(query, list(all_results.keys()))
+        result = cursor.fetchall()
+        result = [r[0] for r in result]
+        new_results = {job_id: job_info for job_id, job_info in all_results.items() if job_id not in result}
+        insert_job_postings(new_results, conn, cursor)
+        total_non_sponsored = len([x for x in all_results.values() if x['sponsored'] is False])
+        new_non_sponsored = len([x for x in new_results.values() if x['sponsored'] is False])
+        print('{}/{} NEW RESULTS | {}/{} NEW NON-PROMOTED RESULTS'.format(
+            len(new_results), len(all_results), new_non_sponsored, total_non_sponsored))
     if not first:
         seconds_per_job = sleep_factor/max(len(new_results), 1)
         sleep_factor = min(seconds_per_job * total_non_sponsored * .75, 200)

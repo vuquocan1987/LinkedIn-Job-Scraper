@@ -4,11 +4,12 @@ from selenium.webdriver.common.by import By
 import time
 import requests
 import pandas as pd
+import urllib.parse
 
 from scripts.helpers import strip_val, get_value_by_path
 
 
-BROWSER = 'edge'
+BROWSER = 'chrome'
 
 def create_session(email, password):
     if BROWSER == 'chrome':
@@ -20,9 +21,10 @@ def create_session(email, password):
     time.sleep(1)
     driver.find_element(By.ID, 'username').send_keys(email)
     driver.find_element(By.ID, 'password').send_keys(password)
-    driver.find_element(By.XPATH, '//*[@id="organic-div"]/form/div[3]/button').click()
-    time.sleep(1)
-    input('Press ENTER after a successful login for "{}": '.format(email))
+    driver.find_element(By.XPATH, '//*[@id="organic-div"]/form/div[4]/button').click()
+    # //*[@id="organic-div"]/form/div[4]/button
+    time.sleep(10)
+    # input('Press ENTER after a successful login for "{}": '.format(email))
     driver.get('https://www.linkedin.com/jobs/search/?')
     time.sleep(1)
     cookies = driver.get_cookies()
@@ -38,17 +40,34 @@ def get_logins(method):
     emails = logins['emails'].tolist()
     passwords = logins['passwords'].tolist()
     return emails, passwords
-
+def parse_count(count_result):
+    if count_result.status_code != 200:
+        raise Exception('Status code {} for search\nText: {}'.format(count_result.status_code, count_result.text))
+    results = count_result.json()['data']['elements'][0]['secondaryFilterGroups']
+    count = -1
+    for result in results:
+        for filter in result['filters']:
+            if filter.get("viewImpressionEventName","") == "search_filter_timepostedrange_view":
+                count = filter['secondaryFilterValues'][0]['count']
+                break
+        if count != -1:
+            break
+    return max(count,0)
 class JobSearchRetriever:
-    def __init__(self):
-        self.job_search_link = 'https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=100&q=jobSearch&query=(origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0'
+    def __init__(self,geo_id='103644278'):
+        # self.job_search_link = 'https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=100&q=jobSearch&query=(origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0'
+        # self.job_search_link = 'https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=100&q=jobSearch&query=(keywords:Data%20Engineer,origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0'
+        # self.job_search_link = 'https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_SEARCH_BUTTON,keywords:%22prompt%20engineer%22,locationUnion:(geoId:103644278),spellCorrectionEnabled:true)'
+        self.filter_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashSearchFilterClustersResource?decorationId=com.linkedin.voyager.dash.deco.search.SearchFilterCluster-44&q=filters&query=(origin:JOB_SEARCH_PAGE_LOCATION_AUTOCOMPLETE,keywords:%22prompt%20engineer%22,locationUnion:(geoId:{geo_id}),spellCorrectionEnabled:true)"
+        self.job_search_link = "https://www.linkedin.com/voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-216&count={}&q=jobSearch&query=(origin:JOBS_HOME_SEARCH_BUTTON,keywords:%22prompt%20engineer%22,locationUnion:(geoId:{}),spellCorrectionEnabled:true)&start=0"
+        self.geo_id = geo_id
         emails, passwords = get_logins('search')
         self.sessions = [create_session(email, password) for email, password in zip(emails, passwords)]
         self.session_index = 0
         self.headers = [{
             'Authority': 'www.linkedin.com',
             'Method': 'GET',
-            'Path': 'voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=25&q=jobSearch&query=(origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0',
+            # 'Path': 'voyager/api/voyagerJobsDashJobCards?decorationId=com.linkedin.voyager.dash.deco.jobs.search.JobSearchCardsCollection-187&count=25&q=jobSearch&query=(origin:JOB_SEARCH_PAGE_OTHER_ENTRY,selectedFilters:(sortBy:List(DD)),spellCorrectionEnabled:true)&start=0',
             'Scheme': 'https',
             'Accept': 'application/vnd.linkedin.normalized+json+2.1',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -62,7 +81,14 @@ class JobSearchRetriever:
         } for session in self.sessions]
 
     def get_jobs(self):
-        results = self.sessions[self.session_index].get(self.job_search_link, headers=self.headers[self.session_index])
+        job_ids = {}
+        count_result = self.sessions[self.session_index].get(self.filter_link.format(geo_id=self.geo_id), headers=self.headers[self.session_index])
+        count = parse_count(count_result)
+        # this code is a techdebted mess but it works (for now) the problem is i am using index 0 to get the count which is not guaranteed to be the same
+        
+        job_search_link = self.job_search_link.format(count, self.geo_id)
+        results = self.sessions[self.session_index].get(job_search_link, headers=self.headers[self.session_index])
+
         self.session_index = (self.session_index + 1) % len(self.sessions)
 
         if results.status_code != 200:
